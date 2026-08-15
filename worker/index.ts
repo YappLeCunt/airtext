@@ -28,33 +28,69 @@ function withSecurityHeaders(response: Response): Response {
 
 async function enforceIpLimit(request: Request, env: Env): Promise<boolean> {
   const ip = request.headers.get('CF-Connecting-IP') ?? ''
-  if (!ip) return true
+  if (!ip || !env.LIMITER) return true
+  try {
+    const limiterId = env.LIMITER.idFromName(ip)
+    const response = await env.LIMITER.get(limiterId).fetch('https://limiter/limit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip }),
+    })
+    if (response.status === 429) return false
+    return true
+  } catch {
+    return true // never block the room on a limiter failure
+  }
+}
+
+async function markSuccess(request: Request, env: Env): Promise<void> {
+  const ip = request.headers.get('CF-Connecting-IP') ?? ''
+  if (!ip || !env.LIMITER) return
   const limiterId = env.LIMITER.idFromName(ip)
-  const response = await env.LIMITER.get(limiterId).fetch('https://limiter/limit', {
+  await env.LIMITER.get(limiterId).fetch('https://limiter/success', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ip }),
   })
-  if (response.status === 429) return false
-  return true
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url)
-    const roomMatch = url.pathname.match(/^\/room\/([A-Z0-9]{8})$/i)
-    if (roomMatch) {
-      if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
-        return withSecurityHeaders(new Response('WebSocket upgrade required', { status: 426 }))
-      }
-      const allowed = await enforceIpLimit(request, env)
-      if (!allowed) {
-        return withSecurityHeaders(new Response('Too many rooms from this network. Try again later.', { status: 429, headers: { 'Retry-After': '3600' } }))
-      }
-      const roomId = env.ROOMS.idFromName(roomMatch[1].toUpperCase())
-      return env.ROOMS.get(roomId).fetch(request)
+    try {
+      return await handleFetch(request, env)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return new Response(`airtext error: ${message}`, { status: 500 })
     }
-
-    return withSecurityHeaders(await env.ASSETS.fetch(request))
   },
+}
+
+async function handleFetch(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  const roomMatch = url.pathname.match(/^\/room\/([A-Z0-9]{8})$/i)
+  if (roomMatch) {
+    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+      return withSecurityHeaders(new Response('WebSocket upgrade required', { status: 426 }))
+    }
+    const allowed = await enforceIpLimit(request, env)
+    if (!allowed) {
+      return withSecurityHeaders(new Response('Too many rooms from this network. Try again later.', { status: 429, headers: { 'Retry-After': '3600' } }))
+    }
+    const roomId = env.ROOMS.idFromName(roomMatch[1].toUpperCase())
+    try {
+      const stub = env.ROOMS.get(roomId)
+      if (!stub) return new Response('room error: ROOMS.get returned undefined', { status: 500 })
+      const upgrade = await stub.fetch(request)
+      // Count a successful join without blocking the upgrade (fire-and-forget).
+      if (upgrade.status === 101) {
+        void markSuccess(request, env).catch(() => undefined)
+      }
+      return upgrade
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return new Response(`room error: ${message}`, { status: 500 })
+    }
+  }
+
+  return withSecurityHeaders(await env.ASSETS.fetch(request))
 }

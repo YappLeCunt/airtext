@@ -14,7 +14,8 @@ export type RoomStatus = 'idle' | 'connecting' | 'waiting' | 'connected' | 'disc
 
 export type ClientMessage =
   | { type: 'hello'; version: 1; device: DeviceKind }
-  | { type: 'clipboard-item'; id: string; text: string; createdAt: number; image?: string; kind?: 'text' | 'image' }
+  | { type: 'clipboard-item'; id: string; sealed: string; createdAt: number }
+  | { type: 'ack'; id: string }
   | { type: 'clear-history' }
   | { type: 'ping'; timestamp: number }
 
@@ -22,7 +23,8 @@ export type ServerMessage =
   | { type: 'hello'; version: 1; peers: number }
   | { type: 'peer-joined'; peers: number }
   | { type: 'peer-left'; peers: number }
-  | { type: 'clipboard-item'; id: string; text: string; createdAt: number; source: DeviceKind; image?: string; kind?: 'text' | 'image' }
+  | { type: 'clipboard-item'; id: string; sealed: string; createdAt: number; source: DeviceKind }
+  | { type: 'ack'; id: string }
   | { type: 'clear-history' }
   | { type: 'pong'; timestamp: number }
   | { type: 'error'; code: string; message: string }
@@ -38,11 +40,10 @@ export function isServerMessage(value: unknown): value is ServerMessage {
   if (message.type === 'peer-joined' || message.type === 'peer-left') {
     return typeof message.peers === 'number'
   }
+  if (message.type === 'ack') return typeof message.id === 'string'
   if (message.type === 'clear-history') return true
   if (message.type === 'clipboard-item') {
-    const kindOk = message.kind === undefined || message.kind === 'text' || message.kind === 'image'
-    const imageOk = message.image === undefined || typeof message.image === 'string'
-    return kindOk && imageOk && typeof message.id === 'string' && typeof message.text === 'string' && typeof message.createdAt === 'number' && (message.source === 'desktop' || message.source === 'phone')
+    return typeof message.id === 'string' && typeof message.sealed === 'string' && typeof message.createdAt === 'number' && (message.source === 'desktop' || message.source === 'phone')
   }
   if (message.type === 'pong') return typeof message.timestamp === 'number'
   if (message.type === 'error') return typeof message.code === 'string' && typeof message.message === 'string'
@@ -54,10 +55,9 @@ export function isClientMessage(value: unknown): value is ClientMessage {
   const message = value as Record<string, unknown>
   if (message.type === 'hello') return message.version === 1 && (message.device === 'desktop' || message.device === 'phone')
   if (message.type === 'clipboard-item') {
-    const kindOk = message.kind === undefined || message.kind === 'text' || message.kind === 'image'
-    const imageOk = message.image === undefined || typeof message.image === 'string'
-    return kindOk && imageOk && typeof message.id === 'string' && typeof message.text === 'string' && typeof message.createdAt === 'number'
+    return typeof message.id === 'string' && typeof message.sealed === 'string' && typeof message.createdAt === 'number'
   }
+  if (message.type === 'ack') return typeof message.id === 'string'
   if (message.type === 'clear-history') return true
   if (message.type === 'ping') return typeof message.timestamp === 'number'
   return false

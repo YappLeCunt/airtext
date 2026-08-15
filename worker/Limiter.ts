@@ -1,4 +1,4 @@
-const MAX_PER_IP_PER_HOUR = 100
+const MAX_PER_IP_PER_HOUR = 1000
 const WINDOW_MS = 60 * 60 * 1000
 const KEY_PREFIX = 'ip:'
 
@@ -10,11 +10,22 @@ interface RateState {
 export class Limiter {
   constructor(private readonly state: DurableObjectState) {}
 
+  private async readOrReset(key: string): Promise<RateState> {
+    const now = Date.now()
+    const existing = (await this.state.storage.get<RateState>(key)) ?? { count: 0, windowStart: now }
+    if (now - existing.windowStart >= WINDOW_MS) {
+      existing.count = 0
+      existing.windowStart = now
+    }
+    return existing
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url)
-    if (url.pathname !== '/limit' || request.method !== 'POST') {
-      return new Response('Not found', { status: 404 })
-    }
+    const isSuccess = url.pathname === '/success'
+    if (!isSuccess && url.pathname !== '/limit') return new Response('Not found', { status: 404 })
+    if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 })
+
     let body: { ip?: string }
     try {
       body = (await request.json()) as { ip?: string }
@@ -25,15 +36,16 @@ export class Limiter {
     if (!ip) return new Response('Missing ip', { status: 400 })
 
     const key = KEY_PREFIX + ip
-    const now = Date.now()
-    const existing = (await this.state.storage.get<RateState>(key)) ?? { count: 0, windowStart: now }
-    if (now - existing.windowStart >= WINDOW_MS) {
-      existing.count = 0
-      existing.windowStart = now
+    if (isSuccess) {
+      const state = await this.readOrReset(key)
+      state.count += 1
+      await this.state.storage.put(key, state)
+      return new Response('OK', { status: 200 })
     }
-    existing.count += 1
-    await this.state.storage.put(key, existing)
-    if (existing.count > MAX_PER_IP_PER_HOUR) {
+
+    // /limit is a pure check: reject if already over the cap, without counting.
+    const state = await this.readOrReset(key)
+    if (state.count >= MAX_PER_IP_PER_HOUR) {
       return new Response('Rate limit exceeded', { status: 429, headers: { 'Retry-After': '3600' } })
     }
     return new Response('OK', { status: 200 })
