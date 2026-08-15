@@ -37,8 +37,8 @@ export function JoinScanner({ status, initialCode = '', errorMessage, onConnect,
     scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 220, height: 220 } }, (decoded) => {
       const parsed = parseInvite(decoded)
       if (parsed) {
-        setCode(parsed)
         onConnectRef.current(parsed)
+        setCode(parsed)
         scanner.stop().catch(() => undefined)
       } else {
         setCameraError('That code is not an airtext room.')
@@ -48,8 +48,11 @@ export function JoinScanner({ status, initialCode = '', errorMessage, onConnect,
       setShowManual(true)
     })
     return () => {
-      scanner.stop().catch(() => undefined)
-      scanner.clear()
+      try {
+        scanner.stop().catch(() => undefined)
+      } catch {
+        // Already stopped or never started; nothing to tear down.
+      }
     }
   }, [initialCode])
 

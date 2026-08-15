@@ -12,8 +12,8 @@ interface Peer {
 
 const ROOM_TTL_MS = 30 * 60 * 1000
 const MAX_PEERS = 2
-const MAX_RATE = 60
-const RATE_WINDOW_MS = 10_000
+const MAX_RATE_PER_SECOND = 1
+const RATE_WINDOW_MS = 1_000
 
 export class Room {
   private readonly peers = new Map<WebSocket, Peer>()
@@ -53,8 +53,8 @@ export class Room {
       return
     }
     const now = Date.now()
-    if (now - peer.lastMessageAt < RATE_WINDOW_MS / MAX_RATE) {
-      this.sendError(peer.socket, 'rate_limited', 'Too many messages. Try again in a moment.')
+    if (now - peer.lastMessageAt < RATE_WINDOW_MS / MAX_RATE_PER_SECOND) {
+      this.sendError(peer.socket, 'rate_limited', 'Too many messages. Slow down and try again.')
       return
     }
     peer.lastMessageAt = now
@@ -86,6 +86,9 @@ export class Room {
         return
       }
       this.broadcast({ ...message, type: 'clipboard-item', source: peer.device }, peer.socket)
+    }
+    if (message.type === 'clear-history') {
+      this.broadcast({ type: 'clear-history' }, peer.socket)
     }
   }
 

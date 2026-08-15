@@ -8,11 +8,12 @@ const FALLBACK_KEY = 'airtext-history'
 function normalize(entries: ClipboardEntry[]): ClipboardEntry[] {
   const seen = new Set<string>()
   return entries
-    .filter((entry) => entry.text.trim().length > 0)
+    .filter((entry) => (entry.kind === 'image' ? Boolean(entry.image) : entry.text.trim().length > 0))
     .sort((a, b) => b.createdAt - a.createdAt)
     .filter((entry) => {
-      if (seen.has(entry.text)) return false
-      seen.add(entry.text)
+      const key = entry.kind === 'image' ? `img:${entry.image}` : `txt:${entry.text}`
+      if (seen.has(key)) return false
+      seen.add(key)
       return true
     })
     .slice(0, MAX_ENTRIES)
@@ -76,12 +77,33 @@ export async function saveEntry(entry: ClipboardEntry): Promise<ClipboardEntry[]
   return entries
 }
 
-export function createEntry(text: string, source: ClipboardEntry['source']): ClipboardEntry {
+export async function clearHistory(): Promise<ClipboardEntry[]> {
+  if (!('indexedDB' in window)) {
+    localStorage.removeItem(FALLBACK_KEY)
+    return []
+  }
+  try {
+    const db = await openDatabase()
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite')
+      transaction.objectStore(STORE_NAME).clear()
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error)
+    })
+  } catch {
+    localStorage.removeItem(FALLBACK_KEY)
+  }
+  return []
+}
+
+export function createEntry(text: string, source: ClipboardEntry['source'], image?: string): ClipboardEntry {
   return {
     id: crypto.randomUUID(),
     text,
     createdAt: Date.now(),
     source,
+    kind: image ? 'image' : 'text',
+    image,
   }
 }
 

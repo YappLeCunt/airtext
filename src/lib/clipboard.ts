@@ -14,15 +14,13 @@ export async function writeClipboard(text: string): Promise<ClipboardResult> {
   }
 }
 
-export async function readClipboard(): Promise<{ ok: true; text: string } | { ok: false; message: string }> {
-  if (!navigator.clipboard?.readText) {
-    return { ok: false, message: 'Clipboard access is not available in this browser.' }
-  }
-  try {
-    return { ok: true, text: await navigator.clipboard.readText() }
-  } catch {
-    return { ok: false, message: 'Clipboard permission was blocked. Paste the text here instead.' }
-  }
+export async function blobToDataUrl(blob: Blob): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
 }
 
 export function clipboardErrorForSend(error: unknown): string {

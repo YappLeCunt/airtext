@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ClipboardComposer } from './components/ClipboardComposer'
 import { ClipboardHistory } from './components/ClipboardHistory'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { HostPairing } from './components/HostPairing'
 import { JoinScanner } from './components/JoinScanner'
 import { ModeChooser } from './components/ModeChooser'
-import { createEntry, loadHistory, saveEntry } from './lib/historyStore'
+import { createEntry, loadHistory, saveEntry, clearHistory } from './lib/historyStore'
 import { preferredDevice } from './lib/device'
 import { RoomClient, parseInvite } from './lib/roomClient'
 import type { ClipboardEntry, DeviceKind, RoomStatus, ServerMessage } from './types'
@@ -19,15 +19,17 @@ function App() {
   const [statusMessage, setStatusMessage] = useState('')
   const [history, setHistory] = useState<ClipboardEntry[]>([])
   const [client, setClient] = useState<RoomClient | null>(null)
+  const clientRef = useRef<RoomClient | null>(null)
 
   useEffect(() => {
     loadHistory().then(setHistory)
   }, [])
 
-  useEffect(() => () => client?.close(), [client])
+  useEffect(() => () => clientRef.current?.close(), [])
 
   function reset(): void {
     client?.close()
+    clientRef.current = null
     setClient(null)
     setRoomCode('')
     setDevice(null)
@@ -45,6 +47,7 @@ function App() {
     }
     client?.close()
     const nextClient = new RoomClient(parsed, nextDevice)
+    clientRef.current = nextClient
     nextClient.subscribe((event) => {
       if (event.type === 'status') {
         setStatus(event.status)
@@ -59,20 +62,29 @@ function App() {
   }
 
   function handleServerMessage(message: ServerMessage): void {
+    if (message.type === 'clear-history') {
+      clearHistory().then(setHistory)
+      return
+    }
     if (message.type !== 'clipboard-item') return
-    const entry: ClipboardEntry = { id: message.id, text: message.text, createdAt: message.createdAt, source: 'other device' }
+    const entry: ClipboardEntry = { id: message.id, text: message.text, createdAt: message.createdAt, source: 'other device', kind: message.kind, image: message.image }
     saveEntry(entry).then(setHistory)
   }
 
-  async function share(text: string): Promise<void> {
+  async function share(text: string, image?: string): Promise<void> {
     if (!client || status !== 'connected') throw new Error('Connect both devices before sharing text.')
-    const entry = createEntry(text, 'this device')
+    const entry = createEntry(text, 'this device', image)
     setHistory(await saveEntry(entry))
-    client.send({ type: 'clipboard-item', id: entry.id, text: entry.text, createdAt: entry.createdAt })
+    client.send({ type: 'clipboard-item', id: entry.id, text: entry.text, createdAt: entry.createdAt, kind: entry.kind, image: entry.image })
+  }
+
+  async function clearAllHistory(): Promise<void> {
+    setHistory(await clearHistory())
+    client?.send({ type: 'clear-history' })
   }
 
   function workspace(): React.JSX.Element {
-    return <main className="workspace-shell"><header className="workspace-header"><div><p className="eyebrow">Airtext room <span className="room-code-inline">{roomCode.slice(0, 4)} {roomCode.slice(4)}</span></p><h1>Clipboard, in sync.</h1></div><div className="workspace-actions"><ConnectionStatus status={status} onReset={reset} /><button className="secondary-button" type="button" onClick={reset}>Leave room</button></div></header><div className="workspace-grid"><div className="workspace-main"><ClipboardComposer onShare={share} /><ClipboardHistory entries={history} /></div><aside className="workspace-rail"><div className="rail-card"><span className="rail-kicker">Connected device</span><div className="device-line"><span className="device-orb" aria-hidden="true">{device === 'desktop' ? '⌁' : '⌘'}</span><div><strong>{device === 'desktop' ? 'Phone' : 'Computer'}</strong><small>Ready to receive</small></div><span className="online-dot" aria-label="Online" /></div><p>Share text from either screen. It will appear at the top of both histories.</p></div><div className="rail-note"><span aria-hidden="true">◌</span><p><strong>Private by default.</strong> This room is temporary. Your history is stored only in this browser.</p></div></aside></div></main>
+    return <main className="workspace-shell"><header className="workspace-header"><div><p className="eyebrow">Airtext room <span className="room-code-inline">{roomCode.slice(0, 4)} {roomCode.slice(4)}</span></p><h1>Clipboard, in sync.</h1></div><div className="workspace-actions"><ConnectionStatus status={status} onReset={reset} /><button className="secondary-button" type="button" onClick={reset}>Leave room</button></div></header><div className="workspace-grid"><div className="workspace-main"><ClipboardComposer onShare={share} /><ClipboardHistory entries={history} onClear={clearAllHistory} /></div><aside className="workspace-rail"><div className="rail-card"><span className="rail-kicker">Connected device</span><div className="device-line"><span className="device-orb" aria-hidden="true">{device === 'desktop' ? '⌁' : '⌘'}</span><div><strong>{device === 'desktop' ? 'Phone' : 'Computer'}</strong><small>Ready to receive</small></div><span className="online-dot" aria-label="Online" /></div><p>Share text from either screen. It will appear at the top of both histories.</p></div><div className="rail-note"><span aria-hidden="true">◌</span><p><strong>Private by default.</strong> This room is temporary. Your history is stored only in this browser.</p></div></aside></div></main>
   }
 
   if (status === 'connected') return workspace()
