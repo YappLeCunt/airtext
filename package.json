@@ -1,0 +1,38 @@
+{
+  "name": "airtext",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "html5-qrcode": "latest",
+    "qrcode": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest",
+    "wrangler": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/qrcode": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@cloudflare/workers-types": "latest",
+    "@eslint/js": "latest",
+    "@typescript-eslint/eslint-plugin": "latest",
+    "@typescript-eslint/parser": "latest",
+    "typescript-eslint": "latest",
+    "eslint": "latest",
+    "eslint-plugin-react-hooks": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

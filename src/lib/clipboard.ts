@@ -1,0 +1,30 @@
+export type ClipboardResult =
+  | { ok: true }
+  | { ok: false; code: 'unavailable' | 'denied' | 'failed'; message: string }
+
+export async function writeClipboard(text: string): Promise<ClipboardResult> {
+  if (!navigator.clipboard?.writeText) {
+    return { ok: false, code: 'unavailable', message: 'Clipboard access is not available in this browser.' }
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    return { ok: true }
+  } catch {
+    return { ok: false, code: 'denied', message: 'Clipboard permission was blocked. Allow access and try again.' }
+  }
+}
+
+export async function readClipboard(): Promise<{ ok: true; text: string } | { ok: false; message: string }> {
+  if (!navigator.clipboard?.readText) {
+    return { ok: false, message: 'Clipboard access is not available in this browser.' }
+  }
+  try {
+    return { ok: true, text: await navigator.clipboard.readText() }
+  } catch {
+    return { ok: false, message: 'Clipboard permission was blocked. Paste the text here instead.' }
+  }
+}
+
+export function clipboardErrorForSend(error: unknown): string {
+  return error instanceof Error ? error.message : 'The clipboard item could not be shared.'
+}

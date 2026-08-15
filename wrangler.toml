@@ -1,0 +1,14 @@
+name = "airtext"
+main = "worker/index.ts"
+compatibility_date = "2026-08-14"
+
+[assets]
+directory = "./dist"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
