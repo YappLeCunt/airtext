@@ -10,6 +10,7 @@ import { preferredDevice } from './lib/device'
 import { writeClipboard } from './lib/clipboard'
 import { RoomClient, parseInvite } from './lib/roomClient'
 import type { ClipboardEntry, DeviceKind, RoomStatus, ServerMessage } from './types'
+import { createRoomCode } from './types'
 
 const AUTO_COPY_KEY = 'airtext-auto-copy'
 const ROOM_KEY = 'airtext-room'
@@ -46,6 +47,7 @@ function App() {
   const initialInvite = useMemo(() => new URLSearchParams(window.location.search).get('join') ?? '', [])
   const savedRoom = useMemo(loadSavedRoom, [])
   const [device, setDevice] = useState<DeviceKind | null>(initialInvite ? 'phone' : savedRoom?.device ?? null)
+  const [hostCode, setHostCode] = useState(() => (savedRoom?.device === 'desktop' ? savedRoom.code : ''))
   const [roomCode, setRoomCode] = useState('')
   const [status, setStatus] = useState<RoomStatus>('idle')
   const [statusMessage, setStatusMessage] = useState('')
@@ -86,11 +88,23 @@ function App() {
     clientRef.current = null
     setClient(null)
     setRoomCode('')
+    setHostCode('')
     setDevice(null)
     setStatus('idle')
     setStatusMessage('')
     clearSavedRoom()
     if (window.location.search) window.history.replaceState({}, '', window.location.pathname)
+  }
+
+  function startHosting(): void {
+    setDevice('desktop')
+    setStatus('idle')
+    // Generate the code here (not inside HostPairing, which can remount when
+    // the status flips between pairing and workspace). A stable code keeps the
+    // phone on the same room and lets connect() below stay idempotent.
+    const code = hostCode || createRoomCode()
+    setHostCode(code)
+    connect(code, 'desktop')
   }
 
   function connect(code: string, nextDevice = device ?? preferred): void {
@@ -166,7 +180,7 @@ function App() {
   // stays on the workspace during reconnect attempts instead of losing the room.
   const showWorkspace = status === 'connected' || (device === 'phone' && client !== null && status !== 'idle')
   if (showWorkspace) return workspace()
-  return <main className="app-shell"><header className="app-header"><a className="wordmark" href="/" onClick={(event) => { event.preventDefault(); reset() }}>airtext<span>·</span></a><div className="app-header-actions"><span className="header-note">A tiny bridge between screens</span><button className="theme-toggle" type="button" onClick={() => setDark((value) => !value)} aria-label="Toggle dark mode" title="Toggle dark mode">{dark ? '☀' : '☾'}</button></div></header>{device === null ? <ModeChooser current={device} preferred={preferred} onChoose={(next) => { setDevice(next); if (next === 'desktop') setStatus('idle') }} /> : device === 'desktop' ? <HostPairing status={status} onConnect={(code) => connect(code, 'desktop')} onReset={reset} /> : <JoinScanner status={status} initialCode={initialInvite} errorMessage={statusMessage} onConnect={(code) => connect(code, 'phone')} onReset={reset} />}{device !== null && !client ? <button className="back-button" type="button" onClick={reset}>← Choose another device</button> : null}</main>
+  return <main className="app-shell"><header className="app-header"><a className="wordmark" href="/" onClick={(event) => { event.preventDefault(); reset() }}>airtext<span>·</span></a><div className="app-header-actions"><span className="header-note">A tiny bridge between screens</span><button className="theme-toggle" type="button" onClick={() => setDark((value) => !value)} aria-label="Toggle dark mode" title="Toggle dark mode">{dark ? '☀' : '☾'}</button></div></header>{device === null ? <ModeChooser current={device} preferred={preferred} onChoose={(next) => { if (next === 'desktop') startHosting(); else setDevice(next) }} /> : device === 'desktop' ? <HostPairing code={hostCode} status={status} onConnect={(code) => connect(code, 'desktop')} onReset={reset} /> : <JoinScanner status={status} initialCode={initialInvite} errorMessage={statusMessage} onConnect={(code) => connect(code, 'phone')} onReset={reset} />}{device !== null && !client ? <button className="back-button" type="button" onClick={reset}>← Choose another device</button> : null}</main>
 }
 
 export default App

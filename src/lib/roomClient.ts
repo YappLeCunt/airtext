@@ -68,12 +68,17 @@ export class RoomClient {
     socket.addEventListener('close', () => {
       if (socket !== this.socket) return
       this.clearPing()
+      // A deliberate close() (e.g. leaving the room or reconnecting with a new
+      // socket) must not emit "disconnected": the UI would flash an error and
+      // a "Start over" button while the new connection is still forming.
+      if (this.manuallyClosed) return
       this.emit({ type: 'status', status: 'disconnected' })
       this.scheduleReconnect()
     })
 
     socket.addEventListener('error', () => {
       if (socket !== this.socket) return
+      if (this.manuallyClosed) return
       this.emit({ type: 'status', status: 'error', message: 'Could not reach this room.' })
     })
   }
@@ -89,8 +94,20 @@ export class RoomClient {
         if (message.peers === 2) this.emit({ type: 'status', status: 'connected' })
         else this.emit({ type: 'status', status: 'waiting' })
       }
-      if (message.type === 'peer-left') this.emit({ type: 'status', status: 'waiting' })
-      if (message.type === 'error') this.emit({ type: 'status', status: 'error', message: message.message })
+      if (message.type === 'peer-left') {
+        // Count-aware: during a reconnect the old socket can be closed before
+        // the new one's hello registers, so a "peer-left peers=2" arrives even
+        // though both peers are still present. Only drop to "waiting" when a
+        // peer actually left.
+        this.emit({ type: 'status', status: message.peers === 2 ? 'connected' : 'waiting' })
+      }
+      if (message.type === 'error') {
+        this.emit({ type: 'status', status: 'error', message: message.message })
+        // A definitive rejection (another live socket owns this device) should
+        // not be retried forever: the server keeps a cooldown anyway, and a
+        // loser that keeps reconnecting would keep re-replacing the winner.
+        if (message.code === 'device_in_use') this.stopRetrying()
+      }
       if (message.type === 'clipboard-item') {
         const plaintext = await open(this.crypto, message.sealed)
         if (plaintext !== null) {
@@ -143,6 +160,12 @@ export class RoomClient {
       this.reconnectTimer = undefined
       this.openSocket()
     }, delay)
+  }
+
+  private stopRetrying(): void {
+    this.manuallyClosed = true
+    this.clearPing()
+    this.clearReconnect()
   }
 
   private clearReconnect(): void {

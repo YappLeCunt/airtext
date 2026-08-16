@@ -7,14 +7,24 @@ interface Env {
 interface Attachment {
   device: DeviceKind | null
   lastMessageAt: number
+  lastContentAt: number
 }
 
 const ROOM_TTL_MS = 30 * 60 * 1000
 const MAX_RATE_PER_SECOND = 1
 const RATE_WINDOW_MS = 1_000
+// A socket is stale if it has not sent anything for this long. Clients re-hello
+// every 15s, so a live socket always has a fresh lastMessageAt.
+const STALE_SOCKET_MS = 30_000
+// After replacing a device's socket, reject re-joins from the replaced client
+// for this long. The client retries with backoff for ~31s (1+2+4+8+16), so a
+// cooldown longer than that lets the loser give up instead of re-replacing the
+// winner and ping-ponging forever.
+const REPLACE_COOLDOWN_MS = 60_000
 
 export class Room {
   private readonly peers = new Map<WebSocket, Attachment>()
+  private readonly replaceCooldowns = new Map<DeviceKind, number>()
   private cleanupTimer: number | undefined
 
   constructor(private readonly state: DurableObjectState, private readonly env: Env) {
@@ -22,7 +32,7 @@ export class Room {
     // being evicted from memory (WebSocket Hibernation API).
     for (const socket of this.state.getWebSockets()) {
       const attachment = socket.deserializeAttachment() as Attachment | null
-      this.peers.set(socket, attachment ?? { device: null, lastMessageAt: 0 })
+      this.peers.set(socket, attachment ?? { device: null, lastMessageAt: 0, lastContentAt: 0 })
     }
   }
 
@@ -46,7 +56,7 @@ export class Room {
     // registered; the hello handler corrects the count and announces the join
     // once the client identifies itself.
     const peerCount = this.peers.size
-    this.peers.set(server, { device: null, lastMessageAt: 0 })
+    this.peers.set(server, { device: null, lastMessageAt: Date.now(), lastContentAt: 0 })
     this.scheduleCleanup()
 
     console.log('ROOM: peer connected, total peers', this.peers.size)
@@ -58,9 +68,13 @@ export class Room {
   async webSocketMessage(socket: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     let attachment = this.peers.get(socket)
     if (!attachment) {
-      attachment = { device: null, lastMessageAt: 0 }
+      attachment = { device: null, lastMessageAt: 0, lastContentAt: 0 }
       this.peers.set(socket, attachment)
     }
+    // Every message counts as liveness, so the hello handler can tell a live
+    // socket apart from a stale one.
+    attachment.lastMessageAt = Date.now()
+    this.persist(socket, attachment)
     if (typeof raw !== 'string' || raw.length > MAX_TEXT_LENGTH + 500) {
       this.sendError(socket, 'payload_too_large', 'This clipboard item is too large.')
       return
@@ -81,21 +95,32 @@ export class Room {
     // lightweight keepalives and must never be throttled.
     if (message.type === 'clipboard-item') {
       const now = Date.now()
-      if (now - attachment.lastMessageAt < RATE_WINDOW_MS / MAX_RATE_PER_SECOND) {
+      if (now - attachment.lastContentAt < RATE_WINDOW_MS / MAX_RATE_PER_SECOND) {
         this.sendError(socket, 'rate_limited', 'Too many messages. Slow down and try again.')
         return
       }
-      attachment.lastMessageAt = now
+      attachment.lastContentAt = now
       this.persist(socket, attachment)
     }
     if (message.type === 'hello') {
-      // Replace a stale socket from the same device (e.g. after a reconnect),
-      // so a dropped peer never leaves a half-open room.
+      const now = Date.now()
+      // Only replace a socket that is actually stale (has not sent anything
+      // recently). Two live sockets for the same device (e.g. two tabs) must
+      // not trade kills forever, and a client retrying after being replaced
+      // must not immediately re-replace the winner.
       for (const [other, existing] of this.peers) {
-        if (other !== socket && existing.device === message.device) {
-          this.peers.delete(other)
-          try { other.close() } catch { /* already closed */ }
+        if (other === socket || existing.device !== message.device) continue
+        const stale = now - existing.lastMessageAt > STALE_SOCKET_MS
+        const inCooldown = now < (this.replaceCooldowns.get(message.device) ?? 0)
+        if (!stale && inCooldown) {
+          this.sendError(socket, 'device_in_use', 'This room already has this device connected. Close the other tab and try again.')
+          this.peers.delete(socket)
+          try { socket.close() } catch { /* already closed */ }
+          return
         }
+        this.peers.delete(other)
+        this.replaceCooldowns.set(message.device, now + REPLACE_COOLDOWN_MS)
+        try { other.close() } catch { /* already closed */ }
       }
       attachment.device = message.device
       this.persist(socket, attachment)

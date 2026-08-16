@@ -1,21 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import type { RoomStatus } from '../types'
-import { createRoomCode, roomInviteUrl } from '../types'
+import { roomInviteUrl } from '../types'
 import { ConnectionStatus } from './ConnectionStatus'
 
 interface HostPairingProps {
+  code: string
   status: RoomStatus
   onConnect: (code: string) => void
   onReset: () => void
 }
 
-export function HostPairing({ status, onConnect, onReset }: HostPairingProps) {
-  const [code] = useState(createRoomCode)
+export function HostPairing({ code, status, onConnect, onReset }: HostPairingProps) {
   const [qrData, setQrData] = useState('')
   const [copied, setCopied] = useState(false)
   const onConnectRef = useRef(onConnect)
-  const roomStartedRef = useRef(false)
 
   useEffect(() => {
     onConnectRef.current = onConnect
@@ -24,10 +23,6 @@ export function HostPairing({ status, onConnect, onReset }: HostPairingProps) {
   useEffect(() => {
     QRCode.toDataURL(roomInviteUrl(code), { width: 280, margin: 1, color: { dark: '#1e2927', light: '#fffdf8' } }).then((data) => {
       setQrData(data)
-      if (!roomStartedRef.current) {
-        roomStartedRef.current = true
-        onConnectRef.current(code)
-      }
     })
   }, [code])
 
