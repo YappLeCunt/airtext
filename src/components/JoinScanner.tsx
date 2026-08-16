@@ -19,6 +19,7 @@ export function JoinScanner({ status, initialCode = '', errorMessage, onConnect,
   const [showManual, setShowManual] = useState(Boolean(initialCode))
   const onConnectRef = useRef(onConnect)
   const autoJoinedRef = useRef(false)
+  const joinedRef = useRef(false)
 
   useEffect(() => {
     onConnectRef.current = onConnect
@@ -36,13 +37,17 @@ export function JoinScanner({ status, initialCode = '', errorMessage, onConnect,
     scannerRef.current = scanner
     scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 220, height: 220 } }, (decoded) => {
       const parsed = parseInvite(decoded)
-      if (parsed) {
-        onConnectRef.current(parsed)
-        setCode(parsed)
-        scanner.stop().catch(() => undefined)
-      } else {
+      if (!parsed) {
         setCameraError('That code is not an airtext room.')
+        return
       }
+      // The decode callback fires on every frame while the code is in view and
+      // stop() is async, so guard against joining the same room repeatedly.
+      if (joinedRef.current) return
+      joinedRef.current = true
+      onConnectRef.current(parsed)
+      setCode(parsed)
+      scanner.stop().catch(() => undefined)
     }, () => undefined).catch(() => {
       setCameraError('Camera access is unavailable. Enter the room code instead.')
       setShowManual(true)
@@ -59,8 +64,12 @@ export function JoinScanner({ status, initialCode = '', errorMessage, onConnect,
   function submitCode(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault()
     const parsed = parseInvite(code)
-    if (parsed) onConnect(parsed)
-    else setCameraError('Enter the 8-character code shown on the computer.')
+    if (parsed && !joinedRef.current) {
+      joinedRef.current = true
+      onConnect(parsed)
+    } else if (!parsed) {
+      setCameraError('Enter the 8-character code shown on the computer.')
+    }
   }
 
   return (

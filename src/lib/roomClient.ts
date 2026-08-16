@@ -36,6 +36,11 @@ export class RoomClient {
     this.openSocket()
   }
 
+  isOpen(): boolean {
+    const readyState = this.socket?.readyState
+    return readyState === WebSocket.OPEN || readyState === WebSocket.CONNECTING
+  }
+
   private openSocket(): void {
     this.emit({ type: 'status', status: 'connecting' })
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'

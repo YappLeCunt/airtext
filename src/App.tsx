@@ -100,6 +100,11 @@ function App() {
       setStatusMessage('That room code is not valid.')
       return
     }
+    // Joining the same room twice (QR re-decodes fire several times per second
+    // until the scanner stops, and the manual form can be re-submitted) must
+    // not tear down and rebuild the socket; that churn makes both peers flip
+    // between "waiting" and "connected" on every attempt.
+    if (clientRef.current && roomCode === parsed && device === nextDevice && clientRef.current.isOpen()) return
     client?.close()
     const nextClient = new RoomClient(parsed, nextDevice)
     clientRef.current = nextClient

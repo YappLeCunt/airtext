@@ -41,12 +41,16 @@ export class Room {
     // Object can be evicted while keeping the connection alive. Do NOT call
     // server.accept() or addEventListener here.
     this.state.acceptWebSocket(server)
+    // Count peers before adding this socket so the new client never sees an
+    // inflated count while a stale socket from the same device is still
+    // registered; the hello handler corrects the count and announces the join
+    // once the client identifies itself.
+    const peerCount = this.peers.size
     this.peers.set(server, { device: null, lastMessageAt: 0 })
     this.scheduleCleanup()
 
     console.log('ROOM: peer connected, total peers', this.peers.size)
-    server.send(encode({ type: 'hello', version: 1, peers: this.peers.size }))
-    this.broadcast({ type: 'peer-joined', peers: this.peers.size }, server)
+    server.send(encode({ type: 'hello', version: 1, peers: peerCount }))
 
     return new Response(null, { status: 101, webSocket: client })
   }
@@ -122,7 +126,12 @@ export class Room {
   async webSocketClose(socket: WebSocket): Promise<void> {
     // With web_socket_auto_reply_to_close (compat date >= 2026-04-07) the
     // runtime already completed the close handshake; close() is not required.
-    this.peers.delete(socket)
+    // Only announce departures of peers that were actually connected: a stale
+    // socket removed by the hello replacement logic (or dropped by broadcast)
+    // was already accounted for, and announcing it again would make the other
+    // peer flip back to "waiting" on every reconnect.
+    const wasPresent = this.peers.delete(socket)
+    if (!wasPresent) return
     this.broadcast({ type: 'peer-left', peers: this.peers.size })
     this.scheduleCleanup()
   }
