@@ -13,8 +13,14 @@ import type { ClipboardEntry, DeviceKind, RoomStatus, ServerMessage } from './ty
 import { createRoomCode } from './types'
 
 const AUTO_COPY_KEY = 'airtext-auto-copy'
-const ROOM_KEY = 'airtext-room'
+// v2: bumped to invalidate every saved room across devices (global session
+// reset) and to prevent stale sessions from resurrecting old rooms.
+const ROOM_KEY = 'airtext-room-v2'
 const THEME_KEY = 'airtext-theme'
+
+// Rooms close themselves after 30 minutes of inactivity on the server, so a
+// saved room older than that can never be rejoined — ignore it.
+const ROOM_MAX_AGE_MS = 35 * 60 * 1000
 
 interface SavedRoom {
   code: string
@@ -28,6 +34,10 @@ function loadSavedRoom(): SavedRoom | null {
     if (!raw) return null
     const saved = JSON.parse(raw) as SavedRoom
     if (typeof saved.code !== 'string' || (saved.device !== 'desktop' && saved.device !== 'phone')) return null
+    if (Date.now() - saved.ts > ROOM_MAX_AGE_MS) {
+      localStorage.removeItem(ROOM_KEY)
+      return null
+    }
     return saved
   } catch {
     return null
