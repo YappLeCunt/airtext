@@ -4,6 +4,10 @@ compatibility_date = "2026-08-14"
 
 [assets]
 directory = "./dist"
+binding = "ASSETS"
+# Serve assets through the Worker so SECURITY_HEADERS (X-Frame-Options,
+# Referrer-Policy, …) apply to every response; asset-layer serving skips it.
+run_worker_first = true
 
 [[durable_objects.bindings]]
 name = "ROOMS"
