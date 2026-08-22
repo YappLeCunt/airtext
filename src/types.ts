@@ -97,9 +97,11 @@ export function createRoomCode(): string {
 export function roomInviteUrl(code: string): string {
   const url = new URL(window.location.href)
   url.search = ''
-  // The code unlocks every shared item, so it rides in the URL fragment:
-  // fragments are never sent to the server, keeping the key out of access
-  // logs and browser history.
-  url.hash = `join=${code}`
+  url.hash = ''
+  // Query param, deliberately: URL fragments get stripped or mangled by
+  // several phone scanner chains (native camera quick actions, in-app
+  // browsers), which silently broke pairing. Room codes are short-lived
+  // bearer tokens, so log exposure is bounded to the room's lifetime.
+  url.searchParams.set('join', code)
   return url.toString()
 }

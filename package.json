@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "html5-qrcode": "latest",
+    "jsqr": "^1.4.0",
     "qrcode": "latest",
     "react": "latest",
     "react-dom": "latest",
@@ -21,18 +21,18 @@
     "wrangler": "latest"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "@eslint/js": "latest",
     "@types/node": "latest",
     "@types/qrcode": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "@cloudflare/workers-types": "latest",
-    "@eslint/js": "latest",
     "@typescript-eslint/eslint-plugin": "latest",
     "@typescript-eslint/parser": "latest",
-    "typescript-eslint": "latest",
     "eslint": "latest",
     "eslint-plugin-react-hooks": "latest",
     "typescript": "latest",
+    "typescript-eslint": "latest",
     "vitest": "latest"
   }
 }

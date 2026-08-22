@@ -30,11 +30,11 @@ describe('client limits shared with the worker protocol', () => {
 })
 
 describe('roomInviteUrl', () => {
-  it('carries the code in the URL fragment, not the query', () => {
-    // Test-only global: vitest's node env has no window; the stub provides
-    // exactly the member roomInviteUrl reads.
+  it('carries the code in the query string, which phone scanners preserve', () => {
+    // Regression guard: the #join= fragment variant was stripped or mangled
+    // by several phone scanner chains and silently broke pairing.
     const stubWindow = { location: { href: 'https://airtext.example/pairing?stale=1#old' } } as unknown as Window & typeof globalThis
     globalThis.window = stubWindow
-    expect(roomInviteUrl('AB12CD34')).toBe('https://airtext.example/pairing#join=AB12CD34')
+    expect(roomInviteUrl('AB12CD34')).toBe('https://airtext.example/pairing?join=AB12CD34')
   })
 })

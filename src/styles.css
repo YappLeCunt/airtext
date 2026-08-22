@@ -105,9 +105,7 @@ h2 { margin-bottom: 0; font-size: 25px; letter-spacing: -.045em; }
 .join-shell { display: grid; grid-template-columns: minmax(0, .9fr) minmax(380px, 1.1fr); gap: clamp(40px, 9vw, 130px); align-items: center; max-width: 980px; min-height: calc(100vh - 150px); margin: 0 auto; padding: 60px 0; }
 .scanner-panel { max-width: 460px; padding: 20px; background: var(--ink); border-radius: 18px; box-shadow: var(--shadow); }
 .scanner-window { position: relative; min-height: 380px; overflow: hidden; background: #253531; border-radius: 10px; }
-#qr-reader { width: 100%; min-height: 380px; }
-#qr-reader video { display: block; width: 100% !important; min-height: 380px; object-fit: cover; }
-#qr-reader__dashboard { display: none !important; }
+.scanner-video { display: block; width: 100% !important; min-height: 380px; object-fit: cover; }
 .scanner-corner { position: absolute; width: 32px; height: 32px; border-color: var(--accent); border-style: solid; }
 .scanner-corner--tl { top: 24px; left: 24px; border-width: 3px 0 0 3px; }
 .scanner-corner--tr { top: 24px; right: 24px; border-width: 3px 3px 0 0; }
@@ -213,9 +211,8 @@ h2 { margin-bottom: 0; font-size: 25px; letter-spacing: -.045em; }
   .qr-frame { min-height: 260px; }
   .code-row strong { font-size: 23px; }
   .scanner-panel { padding: 12px; }
-  .scanner-window, #qr-reader, #qr-reader video { min-height: 300px; }
   .workspace-shell { padding-top: 21px; }
-  .workspace-header { display: block; padding-bottom: 22px; }
+  .scanner-window, .scanner-video { min-height: 300px; }
   .workspace-header h1 { font-size: 42px; }
   .workspace-actions { justify-content: space-between; margin-top: 22px; }
   .workspace-actions .connection-status { margin: 0; }

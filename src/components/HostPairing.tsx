@@ -21,7 +21,9 @@ export function HostPairing({ code, status, onConnect, onReset }: HostPairingPro
   }, [onConnect])
 
   useEffect(() => {
-    QRCode.toDataURL(roomInviteUrl(code), { width: 280, margin: 1, color: { dark: '#1e2927', light: '#fffdf8' } }).then((data) => {
+    // scale + integer margin (not a fixed width): fractional module sizes and
+    // the spec-minimum quiet zone make symbols unreliable for scanners.
+    QRCode.toDataURL(roomInviteUrl(code), { scale: 8, margin: 4, color: { dark: '#1e2927', light: '#fffdf8' } }).then((data) => {
       setQrData(data)
     })
   }, [code])

@@ -20,9 +20,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (url.origin !== location.origin) return
 
-  // Never cache the WebSocket room route. Invite codes ride in URL fragments,
-  // which browsers never send over the network, so they cannot appear here.
-  if (url.pathname.startsWith('/room/')) return
+  // Never cache the WebSocket room route or invite URLs: the ?join= param is
+  // a bearer credential and must not persist in a cache keyed without it.
+  if (url.pathname.startsWith('/room/') || url.searchParams.has('join')) return
 
   // Always go to the network first for the app shell and assets; only fall
   // back to cache when offline. This guarantees fresh code after deploys.

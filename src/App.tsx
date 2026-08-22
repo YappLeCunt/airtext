@@ -52,9 +52,12 @@ function clearSavedRoom(): void {
   localStorage.removeItem(ROOM_KEY)
 }
 
-// The invite rides in the URL fragment (#join=CODE): fragments are never sent
-// to the server, so the room key stays out of access logs and history.
+// Invites arrive as ?join=CODE (QR links). The hash form is still parsed for
+// tolerance, but the query form is what phones reliably deliver after a scan.
 function inviteFromLocation(): string {
+  const params = new URLSearchParams(window.location.search)
+  const fromQuery = params.get('join')?.toUpperCase() ?? ''
+  if (/^[A-Z0-9]{8}$/.test(fromQuery)) return fromQuery
   const match = /^#join=([A-Z0-9]{8})$/i.exec(window.location.hash)
   return match ? match[1].toUpperCase() : ''
 }
