@@ -8,6 +8,7 @@ export interface ClipboardEntry {
   source: EntrySource
   image?: string
   kind?: 'text' | 'image'
+  roomId?: string
 }
 
 export type RoomStatus = 'idle' | 'connecting' | 'waiting' | 'connected' | 'disconnected' | 'error'

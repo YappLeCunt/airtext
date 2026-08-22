@@ -84,8 +84,8 @@ function App() {
   }, [dark])
 
   useEffect(() => {
-    loadHistory().then(setHistory)
-  }, [])
+    loadHistory(roomCode).then(setHistory)
+  }, [roomCode])
 
   // Rejoin a saved room after a reload.
   useEffect(() => {
@@ -157,7 +157,7 @@ function App() {
           kind: payload.kind === 'image' ? 'image' : 'text',
           image: typeof payload.image === 'string' ? payload.image : undefined,
         }
-        saveEntry(entry).then(setHistory)
+        saveEntry(entry, parsed).then(setHistory)
         if (autoCopy) void copyEntry(entry)
       } else if (event.type === 'delivered') {
         setDeliveredIds((prev) => new Set(prev).add(event.id))
@@ -183,7 +183,7 @@ function App() {
   async function share(text: string, image?: string): Promise<void> {
     if (!client || status !== 'connected') throw new Error('Connect both devices before sharing text.')
     const entry = createEntry(text, 'this device', image)
-    setHistory(await saveEntry(entry))
+    setHistory(await saveEntry(entry, roomCode))
     await client.sendClipboardItem(entry.id, entry.createdAt, { text: entry.text, image: entry.image, kind: entry.kind })
   }
 

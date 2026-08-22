@@ -11,7 +11,7 @@ A small clipboard bridge between a computer and a phone. Open the app on the com
 1. Choose **Use this computer**. A temporary room opens automatically and displays a QR code plus an 8-character fallback code.
 2. Choose **Use this phone** on the phone, scan the QR, or enter the fallback code.
 3. After both browsers show **Connected**, share text from either composer.
-4. Each browser keeps its own bounded history in IndexedDB. Nothing is associated with an account.
+4. Each browser keeps its own bounded history in IndexedDB, scoped to the current room — a new session starts with a clean trail. Nothing is associated with an account.
 
 ## Privacy and limits
 

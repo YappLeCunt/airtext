@@ -19,6 +19,12 @@ function normalize(entries: ClipboardEntry[]): ClipboardEntry[] {
     .slice(0, MAX_ENTRIES)
 }
 
+// Only entries belonging to the active room are visible; leftovers from older
+// sessions stay hidden until the next write prunes them from storage.
+export function visibleEntries(entries: ClipboardEntry[], roomId: string): ClipboardEntry[] {
+  return normalize(entries.filter((entry) => entry.roomId === roomId))
+}
+
 function fallbackRead(): ClipboardEntry[] {
   try {
     const value = localStorage.getItem(FALLBACK_KEY)
@@ -41,40 +47,48 @@ function openDatabase(): Promise<IDBDatabase> {
   })
 }
 
-export async function loadHistory(): Promise<ClipboardEntry[]> {
+async function readAll(): Promise<ClipboardEntry[]> {
   if (!('indexedDB' in window)) return fallbackRead()
   try {
     const db = await openDatabase()
-    return await new Promise((resolve, reject) => {
-      const request = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
-      request.onsuccess = () => resolve(normalize(request.result as ClipboardEntry[]))
-      request.onerror = () => reject(request.error)
-    })
+    const { promise, resolve, reject } = Promise.withResolvers<ClipboardEntry[]>()
+    const request = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
+    request.onsuccess = () => resolve(request.result as ClipboardEntry[])
+    request.onerror = () => reject(request.error)
+    return await promise
   } catch {
     return fallbackRead()
   }
 }
 
-export async function saveEntry(entry: ClipboardEntry): Promise<ClipboardEntry[]> {
-  const entries = normalize([entry, ...(await loadHistory())])
+export async function loadHistory(roomId: string): Promise<ClipboardEntry[]> {
+  return visibleEntries(await readAll(), roomId)
+}
+
+export async function saveEntry(entry: ClipboardEntry, roomId: string): Promise<ClipboardEntry[]> {
+  // Stamp the room and keep only this room's entries: a new session must not
+  // inherit items from an older one.
+  const stamped: ClipboardEntry = { ...entry, roomId }
+  const entries = visibleEntries(await readAll(), roomId)
+  const merged = normalize([stamped, ...entries])
   if (!('indexedDB' in window)) {
-    fallbackWrite(entries)
-    return entries
+    fallbackWrite(merged)
+    return merged
   }
   try {
     const db = await openDatabase()
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite')
-      const store = transaction.objectStore(STORE_NAME)
-      store.clear()
-      entries.forEach((item) => store.put(item))
-      transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error)
-    })
+    const { promise, resolve, reject } = Promise.withResolvers<void>()
+    const transaction = db.transaction(STORE_NAME, 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    store.clear()
+    merged.forEach((item) => store.put(item))
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+    await promise
   } catch {
-    fallbackWrite(entries)
+    fallbackWrite(merged)
   }
-  return entries
+  return merged
 }
 
 export async function clearHistory(): Promise<ClipboardEntry[]> {
