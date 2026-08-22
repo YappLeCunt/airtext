@@ -18,7 +18,10 @@ export type ServerMessage =
   | { type: 'error'; code: string; message: string }
 
 const MAX_TEXT_LENGTH = 100_000
-const MAX_SEALED_LENGTH = 700_000
+// Sized so the largest legal client item — 100k characters of text plus a
+// 350 KB image — still fits after AES-GCM + base64 (~760 KB worst case),
+// while staying under the ~1 MiB per-frame WebSocket limit.
+const MAX_SEALED_LENGTH = 900_000
 
 export function parseClientMessage(value: unknown): ClientMessage | null {
   if (!value || typeof value !== 'object') return null

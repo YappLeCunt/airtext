@@ -1,4 +1,4 @@
-import { encode, MAX_TEXT_LENGTH, parseClientMessage, type DeviceKind } from './protocol'
+import { encode, MAX_SEALED_LENGTH, parseClientMessage, type DeviceKind } from './protocol'
 
 interface Env {
   ROOMS: DurableObjectNamespace
@@ -75,7 +75,7 @@ export class Room {
     // socket apart from a stale one.
     attachment.lastMessageAt = Date.now()
     this.persist(socket, attachment)
-    if (typeof raw !== 'string' || raw.length > MAX_TEXT_LENGTH + 500) {
+    if (typeof raw !== 'string' || raw.length > MAX_SEALED_LENGTH + 512) {
       this.sendError(socket, 'payload_too_large', 'This clipboard item is too large.')
       return
     }

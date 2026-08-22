@@ -1,3 +1,4 @@
+import type { ClipboardEntry } from '../types'
 export type ClipboardResult =
   | { ok: true }
   | { ok: false; code: 'unavailable' | 'denied' | 'failed'; message: string }
@@ -12,6 +13,21 @@ export async function writeClipboard(text: string): Promise<ClipboardResult> {
   } catch {
     return { ok: false, code: 'denied', message: 'Clipboard permission was blocked. Allow access and try again.' }
   }
+}
+// Copy a received entry: images go back as real image blobs so pasting
+// elsewhere yields the picture, not a data-URL string.
+export async function copyEntry(entry: ClipboardEntry): Promise<ClipboardResult> {
+  if (entry.image && navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+    try {
+      const blob = await (await fetch(entry.image)).blob()
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      return { ok: true }
+    } catch {
+      // Unsupported image type or blocked permission — fall back to text.
+    }
+  }
+  if (!entry.text) return { ok: false, code: 'unavailable', message: 'Nothing to copy.' }
+  return await writeClipboard(entry.text)
 }
 
 export async function blobToDataUrl(blob: Blob): Promise<string> {

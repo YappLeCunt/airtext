@@ -1,5 +1,5 @@
 import type { ClientMessage, DeviceKind, ServerMessage } from '../types'
-import { isServerMessage } from '../types'
+import { isServerMessage, MAX_SEALED_LENGTH } from '../types'
 import { RoomCrypto, seal, open } from './crypto'
 
 export type RoomClientEvent =
@@ -12,6 +12,8 @@ const MAX_RECONNECT_ATTEMPTS = 5
 const BASE_RECONNECT_DELAY_MS = 1_000
 const MAX_RECONNECT_DELAY_MS = 15_000
 
+export type SocketFactory = (url: string) => WebSocket
+
 export class RoomClient {
   private socket: WebSocket | null = null
   private readonly listeners = new Set<(event: RoomClientEvent) => void>()
@@ -21,7 +23,11 @@ export class RoomClient {
   private manuallyClosed = false
   private readonly crypto: RoomCrypto
 
-  constructor(private readonly code: string, private readonly device: DeviceKind) {
+  constructor(
+    private readonly code: string,
+    private readonly device: DeviceKind,
+    private readonly createSocket: SocketFactory = (url) => new WebSocket(url),
+  ) {
     this.crypto = new RoomCrypto(code)
   }
 
@@ -45,7 +51,7 @@ export class RoomClient {
     this.emit({ type: 'status', status: 'connecting' })
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const socketUrl = `${protocol}//${window.location.host}/room/${encodeURIComponent(this.code)}`
-    const socket = new WebSocket(socketUrl)
+    const socket = this.createSocket(socketUrl)
     this.socket = socket
 
     socket.addEventListener('open', () => {
@@ -139,6 +145,9 @@ export class RoomClient {
       throw new Error('Not connected. The room is reconnecting — try again in a moment.')
     }
     const sealedPayload = await seal(this.crypto, JSON.stringify({ ...payload, id, createdAt }))
+    if (sealedPayload.length > MAX_SEALED_LENGTH) {
+      throw new Error('This item is too large to share in one piece.')
+    }
     this.send({ type: 'clipboard-item', id, sealed: sealedPayload, createdAt })
   }
 
@@ -184,11 +193,16 @@ export class RoomClient {
 }
 
 export function parseInvite(input: string): string | null {
+  const text = input.trim()
   try {
-    const url = new URL(input)
-    return url.searchParams.get('join')?.trim().toUpperCase() ?? null
+    const url = new URL(text)
+    const fromQuery = url.searchParams.get('join')?.trim().toUpperCase()
+    if (fromQuery) return /^[A-Z0-9]{8}$/.test(fromQuery) ? fromQuery : null
+    // Current invites carry the code in the fragment (#join=CODE).
+    const fromHash = /(?:^|[#&])join=([A-Za-z0-9]{8})(?:$|&)/.exec(url.hash)
+    return fromHash ? fromHash[1].toUpperCase() : null
   } catch {
-    const code = input.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    const code = text.toUpperCase().replace(/[^A-Z0-9]/g, '')
     return /^[A-Z0-9]{8}$/.test(code) ? code : null
   }
 }

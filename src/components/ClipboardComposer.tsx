@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { blobToDataUrl } from '../lib/clipboard'
+import { MAX_IMAGE_BYTES, MAX_TEXT_LENGTH } from '../types'
 
 interface ClipboardComposerProps {
   onShare: (text: string, image?: string) => Promise<void>
 }
-
-const MAX_IMAGE_BYTES = 500_000
 
 function CameraIcon() {
   return (
@@ -43,7 +42,7 @@ export function ClipboardComposer({ onShare }: ClipboardComposerProps) {
 
   function attachBlob(blob: Blob): void {
     if (blob.size > MAX_IMAGE_BYTES) {
-      setMessage('Image is too large. Keep it under 500 KB.')
+      setMessage(`Image is too large. Keep it under ${MAX_IMAGE_BYTES / 1000} KB.`)
       return
     }
     blobToDataUrl(blob).then((dataUrl) => {
@@ -137,13 +136,13 @@ export function ClipboardComposer({ onShare }: ClipboardComposerProps) {
         <label htmlFor="clipboard-text">Share a text snippet</label>
         <button className="text-button paste-button" type="button" onClick={pasteFromClipboard}><PasteIcon /> Paste from clipboard</button>
       </div>
-      <textarea id="clipboard-text" value={text} onChange={(event) => setText(event.target.value)} onPaste={handlePaste} placeholder="Paste a link, note, command, or anything you need on the other screen…" rows={4} />
+      <textarea id="clipboard-text" value={text} onChange={(event) => setText(event.target.value)} onPaste={handlePaste} placeholder="Paste a link, note, command, or anything you need on the other screen…" rows={4} maxLength={MAX_TEXT_LENGTH} />
       {image ? <div className="image-preview"><img src={image} alt="Attached preview" /><button className="text-button" type="button" onClick={clearImage}>Remove image</button></div> : null}
       <div className="composer-footer">
-        <span className="composer-hint">{message || 'Text or image · up to 100,000 characters / 500 KB'}</span>
+        <span className="composer-hint">{message || 'Text or image · up to 100,000 characters / 350 KB images'}</span>
         <div className="composer-actions">
-          <label className="media-button" title="Take a photo (under 500 KB)"><input type="file" accept="image/*" capture="environment" onChange={pickImage} hidden /><CameraIcon /> Camera</label>
-          <label className="media-button" title="Choose from gallery (under 500 KB)"><input type="file" accept="image/*" onChange={pickImage} hidden /><GalleryIcon /> Gallery</label>
+          <label className="media-button" title="Take a photo (under 350 KB)"><input type="file" accept="image/*" capture="environment" onChange={pickImage} hidden /><CameraIcon /> Camera</label>
+          <label className="media-button" title="Choose from gallery (under 350 KB)"><input type="file" accept="image/*" onChange={pickImage} hidden /><GalleryIcon /> Gallery</label>
           <button className="primary-button" type="submit" disabled={(!text.trim() && !image) || isSending}>{isSending ? 'Sharing…' : 'Share text'} <span aria-hidden="true">↗</span></button>
         </div>
       </div>

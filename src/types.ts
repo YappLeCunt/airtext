@@ -69,15 +69,37 @@ export function getRoomIdFromCode(code: string): string | null {
   return normalized
 }
 
+// Unambiguous alphabet: drops 0/O and 1/I/L lookalikes. Length 32 gives each
+// character exactly 5 bits, so 8 characters carry 40 bits of entropy.
+const ROOM_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
+const ROOM_CODE_LENGTH = 8
+// Bytes at or above the largest multiple of 32 would bias the sampling.
+const ALPHABET_BYTE_LIMIT = Math.floor(256 / ROOM_CODE_ALPHABET.length) * ROOM_CODE_ALPHABET.length
+
+export const MAX_TEXT_LENGTH = 100_000
+export const MAX_IMAGE_BYTES = 350_000
+// Mirrors worker/protocol.ts: sealed payloads above this never fit a frame.
+export const MAX_SEALED_LENGTH = 900_000
+
 export function createRoomCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(8))
-  return Array.from(bytes, (byte) => byte.toString(36).toUpperCase().padStart(2, '0')).join('').slice(0, 8)
+  let code = ''
+  while (code.length < ROOM_CODE_LENGTH) {
+    const bytes = crypto.getRandomValues(new Uint8Array(ROOM_CODE_LENGTH * 2))
+    for (const byte of bytes) {
+      if (byte >= ALPHABET_BYTE_LIMIT) continue
+      code += ROOM_CODE_ALPHABET[byte % ROOM_CODE_ALPHABET.length]
+      if (code.length === ROOM_CODE_LENGTH) break
+    }
+  }
+  return code
 }
 
 export function roomInviteUrl(code: string): string {
   const url = new URL(window.location.href)
   url.search = ''
-  url.hash = ''
-  url.searchParams.set('join', code)
+  // The code unlocks every shared item, so it rides in the URL fragment:
+  // fragments are never sent to the server, keeping the key out of access
+  // logs and browser history.
+  url.hash = `join=${code}`
   return url.toString()
 }

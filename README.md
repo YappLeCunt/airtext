@@ -16,6 +16,7 @@ A small clipboard bridge between a computer and a phone. Open the app on the com
 ## Privacy and limits
 
 - Room codes are temporary bearer capabilities. Leave the room or start over to invalidate the current connection.
+- Invite links carry the room code in the URL fragment (`#join=…`), which browsers never transmit to the server.
 - Only two browser connections are allowed in a room.
 - Clipboard text is forwarded to the other live browser and is not persisted by the Worker.
 - Text is rendered as text, never as HTML.

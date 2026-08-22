@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseClientMessage } from './protocol'
+import { MAX_SEALED_LENGTH, parseClientMessage } from './protocol'
 
 describe('worker protocol', () => {
   it('accepts hello and sealed clipboard messages', () => {
@@ -20,6 +20,6 @@ describe('worker protocol', () => {
 
   it('rejects unknown and oversized messages', () => {
     expect(parseClientMessage({ type: 'nope' })).toBeNull()
-    expect(parseClientMessage({ type: 'clipboard-item', id: '1', sealed: 'x'.repeat(700_001), createdAt: 1 })).toBeNull()
+    expect(parseClientMessage({ type: 'clipboard-item', id: '1', sealed: 'x'.repeat(MAX_SEALED_LENGTH + 1), createdAt: 1 })).toBeNull()
   })
 })

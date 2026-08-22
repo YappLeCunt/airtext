@@ -7,7 +7,7 @@ import { JoinScanner } from './components/JoinScanner'
 import { ModeChooser } from './components/ModeChooser'
 import { createEntry, loadHistory, saveEntry, clearHistory } from './lib/historyStore'
 import { preferredDevice } from './lib/device'
-import { writeClipboard } from './lib/clipboard'
+import { copyEntry } from './lib/clipboard'
 import { RoomClient, parseInvite } from './lib/roomClient'
 import type { ClipboardEntry, DeviceKind, RoomStatus, ServerMessage } from './types'
 import { createRoomCode } from './types'
@@ -52,9 +52,16 @@ function clearSavedRoom(): void {
   localStorage.removeItem(ROOM_KEY)
 }
 
+// The invite rides in the URL fragment (#join=CODE): fragments are never sent
+// to the server, so the room key stays out of access logs and history.
+function inviteFromLocation(): string {
+  const match = /^#join=([A-Z0-9]{8})$/i.exec(window.location.hash)
+  return match ? match[1].toUpperCase() : ''
+}
+
 function App() {
   const preferred = useMemo(() => preferredDevice(), [])
-  const initialInvite = useMemo(() => new URLSearchParams(window.location.search).get('join') ?? '', [])
+  const initialInvite = useMemo(inviteFromLocation, [])
   const savedRoom = useMemo(loadSavedRoom, [])
   const [device, setDevice] = useState<DeviceKind | null>(initialInvite ? 'phone' : savedRoom?.device ?? null)
   const [hostCode, setHostCode] = useState(() => (savedRoom?.device === 'desktop' ? savedRoom.code : ''))
@@ -103,7 +110,7 @@ function App() {
     setStatus('idle')
     setStatusMessage('')
     clearSavedRoom()
-    if (window.location.search) window.history.replaceState({}, '', window.location.pathname)
+    if (window.location.search || window.location.hash) window.history.replaceState({}, '', window.location.pathname)
   }
 
   function startHosting(): void {
@@ -148,7 +155,7 @@ function App() {
           image: typeof payload.image === 'string' ? payload.image : undefined,
         }
         saveEntry(entry).then(setHistory)
-        if (autoCopy && entry.text) writeClipboard(entry.image ?? entry.text)
+        if (autoCopy) void copyEntry(entry)
       } else if (event.type === 'delivered') {
         setDeliveredIds((prev) => new Set(prev).add(event.id))
       } else handleServerMessage(event.message)
@@ -158,7 +165,7 @@ function App() {
     setDevice(nextDevice)
     saveRoom(parsed, nextDevice)
     nextClient.connect()
-    if (window.location.search) window.history.replaceState({}, '', window.location.pathname)
+    if (window.location.search || window.location.hash) window.history.replaceState({}, '', window.location.pathname)
   }
 
   function handleServerMessage(message: ServerMessage): void {
